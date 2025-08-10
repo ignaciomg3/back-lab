@@ -9,34 +9,38 @@ const router = express.Router();
  *     Analisis:
  *       type: object
  *       required:
- *         - numero_analisis
+ *         - nro_informe
+ *         - solicitante
+ *         - fecha
+ *         - estado
  *         - tipo_analisis
- *         - laboratorio
- *         - tecnico_responsable
  *       properties:
- *         numero_analisis:
+ *         nro_informe:
+ *           type: number
+ *           description: Número único del informe
+ *           example: 39
+ *         solicitante:
  *           type: string
- *           description: Número único del análisis
- *         fecha_analisis:
+ *           description: Empresa o persona que solicita el análisis
+ *           example: "AGUAS CORDOBESAS S.A."
+ *         fecha:
  *           type: string
  *           format: date
  *           description: Fecha del análisis
+ *           example: "1997-08-07"
+ *         responsable:
+ *           type: string
+ *           nullable: true
+ *           description: Responsable del análisis
+ *           example: null
+ *         estado:
+ *           type: string
+ *           description: Estado actual del análisis
+ *           example: "Hecho"
  *         tipo_analisis:
  *           type: string
  *           description: Tipo de análisis realizado
- *         laboratorio:
- *           type: string
- *           description: Laboratorio donde se realizó
- *         tecnico_responsable:
- *           type: string
- *           description: Técnico responsable del análisis
- *         observaciones:
- *           type: string
- *           description: Observaciones adicionales
- *         estado:
- *           type: string
- *           enum: [pendiente, en_proceso, completado, cancelado]
- *           description: Estado actual del análisis
+ *           example: "BACTERIOLOGICO COMPLETO"
  */
 
 /**
@@ -51,11 +55,19 @@ const router = express.Router();
  *         schema:
  *           type: string
  *         description: Filtrar por estado
+ *         example: "Hecho"
  *       - in: query
- *         name: laboratorio
+ *         name: solicitante
  *         schema:
  *           type: string
- *         description: Filtrar por laboratorio
+ *         description: Filtrar por solicitante
+ *         example: "AGUAS CORDOBESAS S.A."
+ *       - in: query
+ *         name: tipo_analisis
+ *         schema:
+ *           type: string
+ *         description: Filtrar por tipo de análisis
+ *         example: "BACTERIOLOGICO COMPLETO"
  *     responses:
  *       200:
  *         description: Lista de análisis
@@ -75,13 +87,14 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const { estado, laboratorio } = req.query;
+    const { estado, solicitante, tipo_analisis } = req.query;
     let filter = {};
     
     if (estado) filter.estado = estado;
-    if (laboratorio) filter.laboratorio = laboratorio;
+    if (solicitante) filter.solicitante = new RegExp(solicitante, 'i'); // Búsqueda case-insensitive
+    if (tipo_analisis) filter.tipo_analisis = new RegExp(tipo_analisis, 'i');
     
-    const analisis = await Analisis.find(filter).select('-__v');
+    const analisis = await Analisis.find(filter);
     
     res.json({
       success: true,
@@ -99,17 +112,18 @@ router.get('/', async (req, res) => {
 
 /**
  * @swagger
- * /api/analisis/{id}:
+ * /api/analisis/{nro_informe}:
  *   get:
- *     summary: Obtener un análisis por ID
+ *     summary: Obtener un análisis por número de informe
  *     tags: [Análisis]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: nro_informe
  *         required: true
  *         schema:
- *           type: string
- *         description: ID del análisis
+ *           type: number
+ *         description: Número del informe
+ *         example: 39
  *     responses:
  *       200:
  *         description: Análisis encontrado
@@ -125,14 +139,23 @@ router.get('/', async (req, res) => {
  *       404:
  *         description: Análisis no encontrado
  */
-router.get('/:id', async (req, res) => {
+router.get('/:nro_informe', async (req, res) => {
   try {
-    const analisis = await Analisis.findById(req.params.id).select('-__v');
+    const nro_informe = parseInt(req.params.nro_informe);
+    
+    if (isNaN(nro_informe)) {
+      return res.status(400).json({
+        success: false,
+        error: 'El número de informe debe ser un número válido'
+      });
+    }
+    
+    const analisis = await Analisis.findOne({ nro_informe: nro_informe });
     
     if (!analisis) {
       return res.status(404).json({
         success: false,
-        error: 'Análisis no encontrado'
+        error: `Análisis con número de informe ${nro_informe} no encontrado`
       });
     }
 
@@ -204,16 +227,17 @@ router.post('/', async (req, res) => {
 
 /**
  * @swagger
- * /api/analisis/{id}:
+ * /api/analisis/{nro_informe}:
  *   put:
- *     summary: Actualizar un análisis
+ *     summary: Actualizar un análisis por número de informe
  *     tags: [Análisis]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: nro_informe
  *         required: true
  *         schema:
- *           type: string
+ *           type: number
+ *         description: Número del informe
  *     requestBody:
  *       required: true
  *       content:
@@ -226,18 +250,27 @@ router.post('/', async (req, res) => {
  *       404:
  *         description: Análisis no encontrado
  */
-router.put('/:id', async (req, res) => {
+router.put('/:nro_informe', async (req, res) => {
   try {
-    const analisis = await Analisis.findByIdAndUpdate(
-      req.params.id,
+    const nro_informe = parseInt(req.params.nro_informe);
+    
+    if (isNaN(nro_informe)) {
+      return res.status(400).json({
+        success: false,
+        error: 'El número de informe debe ser un número válido'
+      });
+    }
+    
+    const analisis = await Analisis.findOneAndUpdate(
+      { nro_informe: nro_informe },
       req.body,
       { new: true, runValidators: true }
-    ).select('-__v');
+    );
 
     if (!analisis) {
       return res.status(404).json({
         success: false,
-        error: 'Análisis no encontrado'
+        error: `Análisis con número de informe ${nro_informe} no encontrado`
       });
     }
 
@@ -257,30 +290,40 @@ router.put('/:id', async (req, res) => {
 
 /**
  * @swagger
- * /api/analisis/{id}:
+ * /api/analisis/{nro_informe}:
  *   delete:
- *     summary: Eliminar un análisis
+ *     summary: Eliminar un análisis por número de informe
  *     tags: [Análisis]
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: nro_informe
  *         required: true
  *         schema:
- *           type: string
+ *           type: number
+ *         description: Número del informe
  *     responses:
  *       200:
  *         description: Análisis eliminado exitosamente
  *       404:
  *         description: Análisis no encontrado
  */
-router.delete('/:id', async (req, res) => {
+router.delete('/:nro_informe', async (req, res) => {
   try {
-    const analisis = await Analisis.findByIdAndDelete(req.params.id);
+    const nro_informe = parseInt(req.params.nro_informe);
+    
+    if (isNaN(nro_informe)) {
+      return res.status(400).json({
+        success: false,
+        error: 'El número de informe debe ser un número válido'
+      });
+    }
+    
+    const analisis = await Analisis.findOneAndDelete({ nro_informe: nro_informe });
 
     if (!analisis) {
       return res.status(404).json({
         success: false,
-        error: 'Análisis no encontrado'
+        error: `Análisis con número de informe ${nro_informe} no encontrado`
       });
     }
 

@@ -1,12 +1,24 @@
 const mongoose = require('mongoose');
 
-// Schema para usuarios
+// Schema para usuarios - basado en la estructura real de la BD
 const userSchema = new mongoose.Schema({
-  name: {
+  username: {
     type: String,
-    required: [true, 'El nombre es obligatorio'],
+    required: [true, 'El nombre de usuario es obligatorio'],
+    unique: true,
     trim: true,
-    maxlength: [50, 'El nombre no puede tener más de 50 caracteres']
+    maxlength: [50, 'El nombre de usuario no puede tener más de 50 caracteres']
+  },
+  password: {
+    type: String,
+    required: [true, 'La contraseña es obligatoria'],
+    minlength: [6, 'La contraseña debe tener al menos 6 caracteres']
+  },
+  role: {
+    type: String,
+    required: [true, 'El rol es obligatorio'],
+    enum: ['admin', 'usuario', 'tecnico', 'supervisor'],
+    default: 'usuario'
   },
   email: {
     type: String,
@@ -16,41 +28,24 @@ const userSchema = new mongoose.Schema({
     trim: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Por favor ingresa un email válido']
   },
-  age: {
-    type: Number,
-    min: [0, 'La edad no puede ser negativa'],
-    max: [120, 'La edad no puede ser mayor a 120']
-  },
-  isActive: {
+  activo: {
     type: Boolean,
     default: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
   }
-});
-
-// Middleware para actualizar updatedAt
-userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
+}, {
+  timestamps: false, // No usar timestamps automáticos
+  versionKey: false  // No usar __v
 });
 
 // Método para obtener información básica del usuario
 userSchema.methods.getPublicProfile = function() {
   return {
-    id: this._id,
-    name: this.name,
+    username: this.username,
+    role: this.role,
     email: this.email,
-    age: this.age,
-    isActive: this.isActive,
-    createdAt: this.createdAt
+    activo: this.activo
+    // No incluimos password por seguridad
   };
 };
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.model('User', userSchema, 'users');

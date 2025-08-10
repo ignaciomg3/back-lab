@@ -2,10 +2,93 @@ const express = require('express');
 const User = require('../models/User');
 const router = express.Router();
 
-// GET /api/users - Obtener todos los usuarios
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       required:
+ *         - username
+ *         - password
+ *         - role
+ *         - email
+ *       properties:
+ *         username:
+ *           type: string
+ *           description: Nombre de usuario único
+ *           example: "admin"
+ *         password:
+ *           type: string
+ *           description: Contraseña del usuario
+ *           example: "admin123"
+ *         role:
+ *           type: string
+ *           enum: [admin, usuario, tecnico, supervisor]
+ *           description: Rol del usuario en el sistema
+ *           example: "admin"
+ *         email:
+ *           type: string
+ *           format: email
+ *           description: Email del usuario
+ *           example: "admin@laboratorio.com"
+ *         activo:
+ *           type: boolean
+ *           description: Estado del usuario
+ *           example: true
+ */
+
+/**
+ * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Obtener todos los usuarios activos
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *         description: Filtrar por rol
+ *         example: "admin"
+ *       - in: query
+ *         name: activo
+ *         schema:
+ *           type: boolean
+ *         description: Filtrar por estado activo
+ *         example: true
+ *     responses:
+ *       200:
+ *         description: Lista de usuarios
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 count:
+ *                   type: number
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/User'
+ */
 router.get('/', async (req, res) => {
   try {
-    const users = await User.find({ isActive: true }).select('-__v');
+    const { role, activo } = req.query;
+    let filter = {};
+    
+    // Por defecto, solo mostrar usuarios activos
+    if (activo !== undefined) {
+      filter.activo = activo === 'true';
+    } else {
+      filter.activo = true;
+    }
+    
+    if (role) filter.role = role;
+    
+    const users = await User.find(filter).select('-password'); // No mostrar contraseñas
     res.json({
       success: true,
       count: users.length,
@@ -20,15 +103,43 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/users/:id - Obtener un usuario por ID
-router.get('/:id', async (req, res) => {
+/**
+ * @swagger
+ * /api/users/{username}:
+ *   get:
+ *     summary: Obtener un usuario por nombre de usuario
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: path
+ *         name: username
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Nombre de usuario
+ *         example: "admin"
+ *     responses:
+ *       200:
+ *         description: Usuario encontrado
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   $ref: '#/components/schemas/User'
+ *       404:
+ *         description: Usuario no encontrado
+ */
+router.get('/:username', async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-__v');
+    const user = await User.findOne({ username: req.params.username }).select('-password');
     
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'Usuario no encontrado'
+        error: `Usuario '${req.params.username}' no encontrado`
       });
     }
 
@@ -45,7 +156,24 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST /api/users - Crear un nuevo usuario
+/**
+ * @swagger
+ * /api/users:
+ *   post:
+ *     summary: Crear un nuevo usuario
+ *     tags: [Usuarios]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       201:
+ *         description: Usuario creado exitosamente
+ *       400:
+ *         description: Error de validación
+ */
 router.post('/', async (req, res) => {
   try {
     const user = new User(req.body);
@@ -58,9 +186,11 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
+      // Determinar qué campo causó el error de duplicación
+      const field = Object.keys(error.keyPattern)[0];
       return res.status(400).json({
         success: false,
-        error: 'El email ya está registrado'
+        error: `El ${field} ya está registrado`
       });
     }
     
@@ -81,19 +211,43 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/users/:id - Actualizar un usuario
-router.put('/:id', async (req, res) => {
+/**
+ * @swagger
+ * /api/users/{username}:
+ *   put:
+ *     summary: Actualizar un usuario por nombre de usuario
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: path
+ *         name: username
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Nombre de usuario
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *     responses:
+ *       200:
+ *         description: Usuario actualizado exitosamente
+ *       404:
+ *         description: Usuario no encontrado
+ */
+router.put('/:username', async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
+    const user = await User.findOneAndUpdate(
+      { username: req.params.username },
       req.body,
       { new: true, runValidators: true }
-    ).select('-__v');
+    ).select('-password');
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'Usuario no encontrado'
+        error: `Usuario '${req.params.username}' no encontrado`
       });
     }
 
@@ -120,30 +274,49 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/users/:id - Eliminar un usuario (soft delete)
-router.delete('/:id', async (req, res) => {
+/**
+ * @swagger
+ * /api/users/{username}:
+ *   delete:
+ *     summary: Desactivar un usuario (soft delete)
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: path
+ *         name: username
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Nombre de usuario
+ *     responses:
+ *       200:
+ *         description: Usuario desactivado exitosamente
+ *       404:
+ *         description: Usuario no encontrado
+ */
+router.delete('/:username', async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { isActive: false },
+    const user = await User.findOneAndUpdate(
+      { username: req.params.username },
+      { activo: false },
       { new: true }
-    );
+    ).select('-password');
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: 'Usuario no encontrado'
+        error: `Usuario '${req.params.username}' no encontrado`
       });
     }
 
     res.json({
       success: true,
-      message: 'Usuario eliminado exitosamente'
+      message: 'Usuario desactivado exitosamente',
+      data: user
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: 'Error al eliminar el usuario',
+      error: 'Error al desactivar el usuario',
       details: error.message
     });
   }
