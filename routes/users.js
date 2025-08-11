@@ -46,10 +46,10 @@ const router = express.Router();
  *     tags: [Usuarios]
  *     parameters:
  *       - in: query
- *         name: role
+ *         name: username
  *         schema:
  *           type: string
- *         description: Filtrar por rol
+ *         description: Filtrar por nombre de usuario
  *         example: "admin"
  *       - in: query
  *         name: activo
@@ -76,18 +76,18 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   try {
-    const { role, activo } = req.query;
+    const { username, activo } = req.query;
     let filter = {};
-    
+
     // Por defecto, solo mostrar usuarios activos
     if (activo !== undefined) {
       filter.activo = activo === 'true';
     } else {
       filter.activo = true;
     }
-    
-    if (role) filter.role = role;
-    
+
+    if (username) filter.username = username;
+
     const users = await User.find(filter).select('-password'); // No mostrar contraseñas
     res.json({
       success: true,
