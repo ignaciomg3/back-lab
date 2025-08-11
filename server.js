@@ -13,6 +13,7 @@ const userRoutes = require('./routes/users');
 const analisisRoutes = require('./routes/analisis');
 const resultadosRoutes = require('./routes/resultados');
 const muestrasRoutes = require('./routes/muestras');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +59,7 @@ app.get('/', (req, res) => {
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, swaggerOptions));
 
 // Rutas de la API
+app.use('/api', authRoutes); // Login
 app.use('/api/users', userRoutes);
 app.use('/api/analisis', analisisRoutes);
 app.use('/api/resultados', resultadosRoutes);
